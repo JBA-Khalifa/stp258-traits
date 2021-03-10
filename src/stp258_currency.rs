@@ -1,6 +1,6 @@
 use crate::arithmetic;
 use codec::{Codec, FullCodec};
-pub use frame_support::traits::{BalanceStatus, LockIdentifier};
+use frame_support::traits::{BalanceStatus, LockIdentifier};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult,
@@ -13,7 +13,7 @@ use sp_std::{
 };
 
 /// Abstraction over a fungible multi-stable-currency system.
-pub trait SettCurrency<AccountId> {
+pub trait Stp258Currency<AccountId> {
 	/// The currency identifier.
 	type CurrencyId: FullCodec + Eq + PartialEq + Copy + MaybeSerializeDeserialize + Debug;
 
@@ -68,8 +68,8 @@ pub trait SettCurrency<AccountId> {
 	fn slash(currency_id: Self::CurrencyId, who: &AccountId, amount: Self::Balance) -> Self::Balance;
 }
 
-/// Extended `SettCurrency` with additional helper types and methods.
-pub trait SettCurrencyExtended<AccountId>: SettCurrency<AccountId> {
+/// Extended `Stp258Currency` with additional helper types and methods.
+pub trait Stp258CurrencyExtended<AccountId>: Stp258Currency<AccountId> {
 	/// The type for balance related operations, typically signed int.
 	type Amount: arithmetic::Signed
 		+ TryInto<Self::Balance>
@@ -88,7 +88,7 @@ pub trait SettCurrencyExtended<AccountId>: SettCurrency<AccountId> {
 
 /// A fungible multi-stable-currency system whose accounts can have liquidity
 /// restrictions.
-pub trait SettCurrencyLockable<AccountId>: SettCurrency<AccountId> {
+pub trait Stp258CurrencyLockable<AccountId>: Stp258Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
@@ -126,7 +126,7 @@ pub trait SettCurrencyLockable<AccountId>: SettCurrency<AccountId> {
 }
 
 /// A fungible multi-stable-currency system where funds can be reserved from the user.
-pub trait SettCurrencyReservable<AccountId>: SettCurrency<AccountId> {
+pub trait Stp258CurrencyReservable<AccountId>: Stp258Currency<AccountId> {
 	/// Same result as `reserve(who, value)` (but without the side-effects)
 	/// assuming there are no balance changes in the meantime.
 	fn can_reserve(currency_id: Self::CurrencyId, who: &AccountId, value: Self::Balance) -> bool;
@@ -138,6 +138,18 @@ pub trait SettCurrencyReservable<AccountId>: SettCurrency<AccountId> {
 	/// balance of `who` is less than `value`, then a non-zero second item will
 	/// be returned.
 	fn slash_reserved(currency_id: Self::CurrencyId, who: &AccountId, value: Self::Balance) -> Self::Balance;
+
+	/// Burns `value` from reserved balance of `who`. This function 
+	/// returns `TotalIssuanceUnderflow` as error if underflow. Increases `total_issuance`.
+	/// It changes `TotalIssuance`.
+	/// Is a no-op if the `value` to be deposited is zero.
+	fn burn_reserved(currency_id: Self::CurrencyId, who: &AccountId, value: Self::Balance,) -> DispatchResult;
+
+	/// Mints `value` to reserved balance of `who`. This function 
+	/// returns `TotalIssuanceOverflow` as error if overflow. Increases `total_issuance`.
+	/// It changes `TotalIssuance`.
+	/// Is a no-op if the `value` to be deposited is zero.
+	fn create_reserved(currency_id: Self::CurrencyId, who: &AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// The amount of the balance of a given account that is externally
 	/// reserved; this can still get slashed, but gets slashed last of all.
@@ -184,7 +196,7 @@ pub trait SettCurrencyReservable<AccountId>: SettCurrency<AccountId> {
 }
 
 /// Abstraction over a fungible (single) currency system.
-pub trait BasicCurrency<AccountId> {
+pub trait Stp258Asset<AccountId> {
 	/// The balance of an account.
 	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
 
@@ -229,8 +241,8 @@ pub trait BasicCurrency<AccountId> {
 	fn slash(who: &AccountId, amount: Self::Balance) -> Self::Balance;
 }
 
-/// Extended `BasicCurrency` with additional helper types and methods.
-pub trait BasicCurrencyExtended<AccountId>: BasicCurrency<AccountId> {
+/// Extended `Stp258Asset` with additional helper types and methods.
+pub trait Stp258AssetExtended<AccountId>: Stp258Asset<AccountId> {
 	/// The signed type for balance related operations, typically signed int.
 	type Amount: arithmetic::Signed
 		+ TryInto<Self::Balance>
@@ -249,7 +261,7 @@ pub trait BasicCurrencyExtended<AccountId>: BasicCurrency<AccountId> {
 
 /// A fungible single currency system whose accounts can have liquidity
 /// restrictions.
-pub trait BasicLockableCurrency<AccountId>: BasicCurrency<AccountId> {
+pub trait Stp258AssetLockable<AccountId>: Stp258Asset<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
@@ -277,7 +289,7 @@ pub trait BasicLockableCurrency<AccountId>: BasicCurrency<AccountId> {
 }
 
 /// A fungible single currency system where funds can be reserved from the user.
-pub trait BasicReservableCurrency<AccountId>: BasicCurrency<AccountId> {
+pub trait Stp258AssetReservable<AccountId>: Stp258Asset<AccountId> {
 	/// Same result as `reserve(who, value)` (but without the side-effects)
 	/// assuming there are no balance changes in the meantime.
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
