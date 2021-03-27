@@ -1,10 +1,14 @@
 use crate::arithmetic;
-use codec::{FullCodec, Codec, Encode, Decode};
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Member, MaybeDisplay, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+use codec::{Codec, FullCodec};
+pub use frame_support::{
+	traits::{BalanceStatus, LockIdentifier},
+	codec::{Encode, Decode, EncodeLike},
+	Parameter
 };
-use frame_support::Parameter;
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, 
+};
 use sp_std::{
 	cmp::{Eq, PartialEq},
 	convert::{TryFrom, TryInto},
@@ -24,6 +28,10 @@ pub trait Stp258Currency<AccountId> {
 
 	/// Existential deposit of `currency_id`.
 	fn minimum_balance(currency_id: Self::CurrencyId) -> Self::Balance;
+
+
+	/// base_unit of `currency_id`.
+	fn base_unit(currency_id: Self::CurrencyId) -> Self::Balance;
 
 	/// The total amount of issuance of `currency_id`.
 	fn total_issuance(currency_id: Self::CurrencyId) -> Self::Balance;
@@ -66,20 +74,6 @@ pub trait Stp258Currency<AccountId> {
 	/// As much funds up to `amount` will be deducted as possible.  If this is
 	/// less than `amount`,then a non-zero value will be returned.
 	fn slash(currency_id: Self::CurrencyId, who: &AccountId, amount: Self::Balance) -> Self::Balance;
-}
-
-/// An identifier for a lock. Used for disambiguating different locks so that
-/// they can be individually replaced or removed.
-pub type LockIdentifier = [u8; 8];
-
-
-/// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum BalanceStatus {
-	/// Funds are free, as corresponding to `free` item in Balances.
-	Free,
-	/// Funds are reserved, as corresponding to `reserved` item in Balances.
-	Reserved,
 }
 
 /// Extended `Stp258Currency` with additional helper types and methods.
@@ -354,4 +348,73 @@ pub trait OnDust<AccountId, CurrencyId, Balance> {
 
 impl<AccountId, CurrencyId, Balance> OnDust<AccountId, CurrencyId, Balance> for () {
 	fn on_dust(_: &AccountId, _: CurrencyId, _: Balance) {}
+}
+
+/// Abstraction over a `serp_market` system for the Setheum Elastic Reserve Protocol (SERP) Market for `Stp258Currency` .
+pub trait SerpMarket<AccountId>: Stp258Currency<AccountId> {
+	/// Called when `expand_supply` is received from the SERP.
+	/// Implementation should `deposit` the `amount` to `serpup_to`, 
+	/// then `amount` will be slashed from `serpup_from` and update
+	/// `new_supply`. `quote_price` is the price ( relative to the settcurrency) of 
+	/// the `native_currency` used to expand settcurrency supply.
+	fn expand_supply(
+		native_currency_id: Self::CurrencyId, 
+		stable_currency_id: Self::CurrencyId, 
+		expand_by: Self::Balance, 
+		quote_price: Self::Balance, 
+		// pay_by_quoted: Self::Balance, 
+		// serpers: &AccountId
+	) -> DispatchResult;
+
+	/// Called when `contract_supply` is received from the SERP.
+	/// Implementation should `deposit` the `base_currency_id` (The Native Currency) 
+	/// of `amount` to `serpup_to`, then `amount` will be slashed from `serpup_from` 
+	/// and update `new_supply`. `quote_price` is the price ( relative to the settcurrency) of 
+	/// the `native_currency` used to contract settcurrency supply.
+	fn contract_supply(
+		native_currency_id: Self::CurrencyId, 
+		stable_currency_id: Self::CurrencyId, 
+		contract_by: Self::Balance, 
+		quote_price: Self::Balance, 
+		// pay_by_quoted: Self::Balance, 
+		// serpers: &AccountId
+	) -> DispatchResult;
+}
+
+/// Abstraction over a fungible multi-stable-currency Token Elasticity of Supply system.
+pub trait SerpTes<AccountId>: Stp258Currency<AccountId> {
+	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default;
+	/// Contracts or expands the currency supply based on conditions.
+	/// Filters through the conditions to see whether it's time to adjust supply or not.
+	fn on_serp_block(
+		now: Self::BlockNumber, 
+		stable_currency_id: Self::CurrencyId,
+		stable_currency_price: Self::Balance,
+		native_currency_id: Self::CurrencyId,
+		native_currency_price: Self::Balance, 
+	) -> DispatchResult;
+
+	/// Calculate the amount of supply change from a fraction given as `numerator` and `denominator`.
+	fn supply_change(currency_id: Self::CurrencyId, new_price: Self::Balance) -> Self::Balance;	
+
+	fn serp_elast(
+		stable_currency_id: Self::CurrencyId, 
+		stable_currency_price: Self::Balance, 
+		native_currency_id: Self::CurrencyId,
+		native_currency_price: Self::Balance,
+	) -> DispatchResult;
+}
+
+/// Expected price oracle interface. `fetch_price` must return the amount of Coins exchanged for the tracked value.
+pub trait FetchPrice<Balance> {
+	/// The balance of an account.
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+
+	/// Fetch the current price.
+	fn fetch_price() -> Self::Balance;
+}
+
+/// A trait to provide relative price for two currencies
+pub trait SerpTesPriceProvider<CurrencyId, Price> {
+	fn get_price(base: CurrencyId, quote: CurrencyId) -> Option<Price>;
 }

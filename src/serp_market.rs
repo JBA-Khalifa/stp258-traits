@@ -1,8 +1,7 @@
 use codec::FullCodec;
+use frame_support::Parameter;
 use sp_runtime::{
-	traits::{
-        AtLeast32Bit, MaybeSerializeDeserialize,
-    }, 
+	traits::{AtLeast32Bit, MaybeSerializeDeserialize}, 
     DispatchResult,
 };
 use sp_std::{
@@ -11,7 +10,7 @@ use sp_std::{
 };
 
 /// Abstraction over a serping market system for the Setheum Elastic Reserve Protocol (SERP) Market.
-pub trait Market<CurrencyId, AccountId,  Balance, Price, Source, SerpQuote> {
+pub trait SerpMarket<AccountId> {
 	/// The price to trade.
 	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
     /// The currency type in trade.
@@ -20,24 +19,26 @@ pub trait Market<CurrencyId, AccountId,  Balance, Price, Source, SerpQuote> {
 	/// Called when `expand_supply` is received from the SERP.
 	/// Implementation should `deposit` the `amount` to `serpup_to`, 
 	/// then `amount` will be slashed from `serpup_from` and update
-	/// `new_supply`.
-	fn on_expand_supply(
-        currency_id: CurrencyId,
-		amount: Balance,
-		serpup_to: AccountId,
-		serpup_from: AccountId,
-		new_supply: Balance,
+	/// `new_supply`. `quote_price` is the price ( relative to the settcurrency) of 
+	/// the `native_currency` used to expand settcurrency supply.
+	fn expand_supply(
+		native_currency_id: Self::CurrencyId, 
+		stable_currency_id: Self::CurrencyId, 
+		expand_by: Self::Balance, 
+		pay_by_quoted: Self::Balance, 
+		serpers: &AccountId
 	) -> DispatchResult;
 
 	/// Called when `contract_supply` is received from the SERP.
 	/// Implementation should `deposit` the `base_currency_id` (The Native Currency) 
-    /// of `amount` to `serpup_to`, then `amount` will be slashed from `serpup_from` 
-	/// and update `new_supply`.
-	fn on_contract_supply(
-		currency_id: CurrencyId,
-		amount: Balance,
-		serpdown_to: AccountId,
-		serpdown_from: AccountId,
-		new_supply: Balance,
+	/// of `amount` to `serpup_to`, then `amount` will be slashed from `serpup_from` 
+	/// and update `new_supply`. `quote_price` is the price ( relative to the settcurrency) of 
+	/// the `native_currency` used to contract settcurrency supply.
+	fn contract_supply(
+		native_currency_id: Self::CurrencyId, 
+		stable_currency_id: Self::CurrencyId, 
+		contract_by: Self::Balance, 
+		pay_by_quoted: Self::Balance, 
+		serpers: &AccountId
 	) -> DispatchResult;
 }
